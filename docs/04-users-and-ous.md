@@ -126,7 +126,29 @@ Then I ran the script again, this time making sure to meet the requirements of t
 
 <!-- TODO: if you update the script, add a short second issue here about the false "Created" message and the try/catch fix -->
 
+**Issue:** The script would push a false "Created" message even if the account was made in a disabled state, with no password.
+
+Seen in same problem image above.
+
+**Diagnosis:** When `New-ADUser` failed because of the password, PowerShell treated it as a non-terminating error. It showed the red error message but kept running the rest of the loop, so the script still added the broken account to its group and printed "Created" in green.
+
+**Fix:** I added `-ErrorAction Stop` to `New-ADUser` and `Add-ADGroupMember`, which turns any failure into an error that stops that user's steps. Then I wrapped those lines in a `try/catch`:
+- `try` creates the user, adds them to their group, and prints "Created"
+- `catch` only runs if something fails. It prints a red "FAILED" message with the reason and removes the half-created disabled account so the script can be run again cleanly
+
+```powershell
+try {
+    New-ADUser @params -ErrorAction Stop
+    Add-ADGroupMember -Identity "$dept-Staff" -Members $username -ErrorAction Stop
+    Write-Host "Created $username in $dept" -ForegroundColor Green
+}
+catch {
+    Write-Host "FAILED $username : $($_.Exception.Message)" -ForegroundColor Red
+    # Removes the half-created account if it exists and is disabled
+}
+```
+
 ## What I Learned
 
 - You are able to allow individuals access to different resources by assigning them to a shared group rather than just creating these rules for each user one by one. 
-- The difference and purpose of an OU and a group. An OU is where an object lives, and group policies that are linked to that OU will affect the users and devices within. A group is used in order to declare what resources a group of users and computers has access to. Example a folder, application, or device such as a printer. 
+- The difference and purpose of an OU and a group. An OU is where an object lives, and group policies that are linked to that OU will affect the users and devices within. A group is used in order to declare what resources a group of users and computers has access to. For example; a folder, application, or device such as a printer. 
